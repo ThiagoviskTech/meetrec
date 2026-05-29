@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>index.html</title>
+<title>MeetRec — Gravador de Reuniões</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -746,6 +746,15 @@
         </div>
       </div>
 
+      <div class="speakers-section" style="margin-bottom:16px">
+        <div class="section-title">Chave de API (Anthropic)</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="password" class="input-field" id="apiKeyInput" placeholder="sk-ant-..." style="flex:1;font-size:12px" oninput="saveApiKey(this.value)">
+          <span id="apiKeyStatus" style="font-size:18px;flex-shrink:0">🔴</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:6px">Salva localmente no seu dispositivo. Nunca compartilhada.</div>
+      </div>
+
       <div class="speakers-section">
         <div class="section-title">Participantes</div>
         <div class="speaker-list" id="speakerList"></div>
@@ -808,10 +817,31 @@ document.addEventListener('DOMContentLoaded', () => {
   buildWaveform();
   renderSpeakers();
   renderHistory();
-  // Add default speaker
   speakers = ['Thiago'];
   renderSpeakers();
+  loadApiKey();
 });
+
+function loadApiKey() {
+  try {
+    const key = localStorage.getItem('meetrec_apikey') || '';
+    if (key) {
+      document.getElementById('apiKeyInput').value = key;
+      document.getElementById('apiKeyStatus').textContent = '🟢';
+    }
+  } catch(e) {}
+}
+
+function saveApiKey(val) {
+  try {
+    localStorage.setItem('meetrec_apikey', val.trim());
+    document.getElementById('apiKeyStatus').textContent = val.trim().startsWith('sk-ant-') ? '🟢' : '🔴';
+  } catch(e) {}
+}
+
+function getApiKey() {
+  try { return localStorage.getItem('meetrec_apikey') || ''; } catch(e) { return ''; }
+}
 
 function buildWaveform() {
   const wf = document.getElementById('waveform');
@@ -1050,10 +1080,29 @@ Retorne SOMENTE um JSON válido (sem markdown) com esta estrutura exata:
   "aviso": "Transcrição automática não disponível. Este é um exemplo gerado por IA."
 }`;
 
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    return {
+      resumo: `Reunião "${currentMeeting.name}" processada. Configure a chave de API para gerar análise automática.`,
+      pontos_acao: ['Adicionar chave de API nas configurações', 'Gravar novamente para gerar análise'],
+      transcript_segmentado: currentMeeting.speakers.map((s, i) => ({
+        speaker: s,
+        texto: i === 0 ? 'Abertura da reunião.' : 'Participação na reunião.'
+      })),
+      palavras_chave: ['reunião'],
+      aviso: 'Chave de API não configurada. Adicione sua chave sk-ant-... no campo acima.'
+    };
+  }
+
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 1000,
