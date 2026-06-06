@@ -894,7 +894,11 @@ async function startRecord() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioChunks = [];
-    mediaRecorder = new MediaRecorder(stream);
+    // Detectar formato suportado (Chrome mobile usa mp4/ogg, desktop usa webm)
+    const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4','audio/aac','']
+      .find(m => m === '' || MediaRecorder.isTypeSupported(m)) || '';
+    mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    window._mimeType = mediaRecorder.mimeType || 'audio/webm';
     mediaRecorder.ondataavailable = e => { if(e.data.size > 0) audioChunks.push(e.data); };
     mediaRecorder.start(1000);
 
@@ -921,7 +925,7 @@ function stopRecord() {
   return new Promise(resolve => {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       mediaRecorder.onstop = () => {
-        audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        audioBlob = new Blob(audioChunks, { type: window._mimeType || 'audio/webm' });
         mediaRecorder.stream.getTracks().forEach(t => t.stop());
         resolve();
       };
