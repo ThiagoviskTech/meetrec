@@ -803,6 +803,8 @@
 // ==================== ESTADO ====================
 let isRecording = false;
 let mediaRecorder = null;
+let recognition = null;
+let liveTranscript = "";
 let audioChunks = [];
 let timerInterval = null;
 let seconds = 0;
@@ -910,6 +912,26 @@ async function startRecord() {
     mediaRecorder.ondataavailable = e => { if(e.data.size > 0) audioChunks.push(e.data); };
     mediaRecorder.start(1000);
 
+    // Iniciar transcrição em tempo real
+    liveTranscript = "";
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.lang = 'pt-BR';
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.onresult = e => {
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) {
+            liveTranscript += e.results[i][0].transcript + ' ';
+          }
+        }
+      };
+      recognition.onerror = () => {};
+      recognition.onend = () => { if (isRecording) try { recognition.start(); } catch(e) {} };
+      try { recognition.start(); } catch(e) {}
+    }
+
     isRecording = true;
     seconds = 0;
     startTimer();
@@ -935,6 +957,7 @@ function stopRecord() {
       mediaRecorder.onstop = () => {
         audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
         mediaRecorder.stream.getTracks().forEach(t => t.stop());
+        if (recognition) { try { recognition.stop(); } catch(e) {} recognition = null; }
         resolve();
       };
       mediaRecorder.stop();
@@ -949,6 +972,8 @@ function cancelRecord() {
     mediaRecorder.stream.getTracks().forEach(t => t.stop());
     mediaRecorder = null;
   }
+  if (recognition) { try { recognition.stop(); } catch(e) {} recognition = null; }
+  liveTranscript = "";
   clearInterval(timerInterval);
   resetRecorderUI();
   showToast('Gravação cancelada');
@@ -1033,10 +1058,7 @@ async function processAudio() {
 }
 
 async function transcribeAudio() {
-  // Try Web Speech API for live transcription fallback
-  // Since we recorded already, we'll use a simulated transcript
-  // In production, you'd send audioBlob to a Speech-to-Text API
-  return '';
+  return liveTranscript.trim();
 }
 
 async function generateAnalysis(transcriptText) {
