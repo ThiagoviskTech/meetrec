@@ -1080,8 +1080,8 @@ Retorne SOMENTE um JSON válido (sem markdown) com esta estrutura exata:
   "aviso": "Transcrição automática não disponível. Este é um exemplo gerado por IA."
 }`;
 
-  const apiKey = getApiKey();
-  if (!apiKey) {
+  const apiKey = getApiKey() || "proxy";
+  if (false) {
     return {
       resumo: `Reunião "${currentMeeting.name}" processada. Configure a chave de API para gerar análise automática.`,
       pontos_acao: ['Adicionar chave de API nas configurações', 'Gravar novamente para gerar análise'],
