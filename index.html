@@ -747,7 +747,13 @@
       </div>
 
       <div class="speakers-section" style="margin-bottom:16px">
-        
+        <div class="section-title">Chave de API (Anthropic)</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="password" class="input-field" id="apiKeyInput" placeholder="sk-ant-..." style="flex:1;font-size:12px" oninput="saveApiKey(this.value)">
+          <span id="apiKeyStatus" style="font-size:18px;flex-shrink:0">🔴</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:6px">Salva localmente no seu dispositivo. Nunca compartilhada.</div>
+      </div>
 
       <div class="speakers-section">
         <div class="section-title">Participantes</div>
@@ -820,15 +826,21 @@ function loadApiKey() {
   try {
     const key = localStorage.getItem('meetrec_apikey') || '';
     if (key) {
+      document.getElementById('apiKeyInput').value = key;
+      document.getElementById('apiKeyStatus').textContent = '🟢';
     }
   } catch(e) {}
 }
 
+function saveApiKey(val) {
+  try {
+    localStorage.setItem('meetrec_apikey', val.trim());
+    document.getElementById('apiKeyStatus').textContent = val.trim().startsWith('sk-ant-') ? '🟢' : '🔴';
+  } catch(e) {}
 }
 
 function getApiKey() {
-  return 'proxy';
-} catch(e) { return ''; }
+  try { return localStorage.getItem('meetrec_apikey') || ''; } catch(e) { return ''; }
 }
 
 function buildWaveform() {
@@ -894,11 +906,7 @@ async function startRecord() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     audioChunks = [];
-    // Detectar formato suportado (Chrome mobile usa mp4/ogg, desktop usa webm)
-    const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4','audio/aac','']
-      .find(m => m === '' || MediaRecorder.isTypeSupported(m)) || '';
-    mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-    window._mimeType = mediaRecorder.mimeType || 'audio/webm';
+    mediaRecorder = new MediaRecorder(stream);
     mediaRecorder.ondataavailable = e => { if(e.data.size > 0) audioChunks.push(e.data); };
     mediaRecorder.start(1000);
 
@@ -925,7 +933,7 @@ function stopRecord() {
   return new Promise(resolve => {
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
       mediaRecorder.onstop = () => {
-        audioBlob = new Blob(audioChunks, { type: window._mimeType || 'audio/webm' });
+        audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
         mediaRecorder.stream.getTracks().forEach(t => t.stop());
         resolve();
       };
@@ -1072,8 +1080,8 @@ Retorne SOMENTE um JSON válido (sem markdown) com esta estrutura exata:
   "aviso": "Transcrição automática não disponível. Este é um exemplo gerado por IA."
 }`;
 
-  const apiKey = 'proxy';
-  if (false) {
+  const apiKey = getApiKey();
+  if (!apiKey) {
     return {
       resumo: `Reunião "${currentMeeting.name}" processada. Configure a chave de API para gerar análise automática.`,
       pontos_acao: ['Adicionar chave de API nas configurações', 'Gravar novamente para gerar análise'],
@@ -1082,7 +1090,7 @@ Retorne SOMENTE um JSON válido (sem markdown) com esta estrutura exata:
         texto: i === 0 ? 'Abertura da reunião.' : 'Participação na reunião.'
       })),
       palavras_chave: ['reunião'],
-      aviso: 'Análise via proxy Netlify.'
+      aviso: 'Chave de API não configurada. Adicione sua chave sk-ant-... no campo acima.'
     };
   }
 
