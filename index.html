@@ -747,13 +747,7 @@
       </div>
 
       <div class="speakers-section" style="margin-bottom:16px">
-        <div class="section-title">Chave de API (Anthropic)</div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <input type="password" class="input-field" id="apiKeyInput" placeholder="sk-ant-..." style="flex:1;font-size:12px" oninput="saveApiKey(this.value)">
-          <span id="apiKeyStatus" style="font-size:18px;flex-shrink:0">🔴</span>
-        </div>
-        <div style="font-size:11px;color:var(--text-dim);margin-top:6px">Salva localmente no seu dispositivo. Nunca compartilhada.</div>
-      </div>
+        
 
       <div class="speakers-section">
         <div class="section-title">Participantes</div>
@@ -826,21 +820,15 @@ function loadApiKey() {
   try {
     const key = localStorage.getItem('meetrec_apikey') || '';
     if (key) {
-      document.getElementById('apiKeyInput').value = key;
-      document.getElementById('apiKeyStatus').textContent = '🟢';
     }
   } catch(e) {}
 }
 
-function saveApiKey(val) {
-  try {
-    localStorage.setItem('meetrec_apikey', val.trim());
-    document.getElementById('apiKeyStatus').textContent = val.trim().startsWith('sk-ant-') ? '🟢' : '🔴';
-  } catch(e) {}
 }
 
 function getApiKey() {
-  try { return localStorage.getItem('meetrec_apikey') || ''; } catch(e) { return ''; }
+  return 'proxy';
+} catch(e) { return ''; }
 }
 
 function buildWaveform() {
@@ -1080,8 +1068,8 @@ Retorne SOMENTE um JSON válido (sem markdown) com esta estrutura exata:
   "aviso": "Transcrição automática não disponível. Este é um exemplo gerado por IA."
 }`;
 
-  const apiKey = getApiKey();
-  if (!apiKey) {
+  const apiKey = 'proxy';
+  if (false) {
     return {
       resumo: `Reunião "${currentMeeting.name}" processada. Configure a chave de API para gerar análise automática.`,
       pontos_acao: ['Adicionar chave de API nas configurações', 'Gravar novamente para gerar análise'],
@@ -1090,7 +1078,7 @@ Retorne SOMENTE um JSON válido (sem markdown) com esta estrutura exata:
         texto: i === 0 ? 'Abertura da reunião.' : 'Participação na reunião.'
       })),
       palavras_chave: ['reunião'],
-      aviso: 'Chave de API não configurada. Adicione sua chave sk-ant-... no campo acima.'
+      aviso: 'Análise via proxy Netlify.'
     };
   }
 
