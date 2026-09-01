@@ -6,23 +6,32 @@
 // (Site settings > Environment variables). Chave gratuita em https://aistudio.google.com/apikey
 // A chave NUNCA e exposta ao navegador.
 //
-// Reunioes longas (2-3h) geram transcricoes grandes, o que pode fazer a chamada unica
-// ao Gemini demorar mais do que o limite de execucao do Netlify (~30s). Para evitar isso,
-// transcricoes acima de CHUNK_CHAR_LIMIT sao divididas em pedacos, resumidos em paralelo,
-// e so entao combinados numa chamada final — o tempo total fica limitado ao pedaco mais
-// lento, nao a soma de todos.
+// Reunioes muito longas geram transcricoes muito grandes, o que em teoria poderia fazer a
+// chamada unica ao Gemini demorar mais do que o limite de execucao do Netlify (~30s). Para
+// evitar isso, transcricoes acima de CHUNK_CHAR_LIMIT sao divididas em pedacos, resumidos em
+// paralelo, e so entao combinados numa chamada final.
+//
+// IMPORTANTE — chave gratuita do Gemini: o nivel gratuito deste modelo tem limites BEM baixos
+// (na pratica, ~5 requisicoes por minuto e ~20 por dia — visivel em aistudio.google.com/rate-limit).
+// Cada chamada extra (cada pedaco) consome desse orcamento diario. Por isso CHUNK_CHAR_LIMIT e
+// bem alto (a maioria das reunioes, mesmo de 2-3h, cabe numa unica chamada) e MAX_CHUNKS e baixo
+// (no maximo poucas chamadas paralelas, pra nao estourar o limite por minuto). Se o app for usado
+// com frequencia, vale habilitar faturamento no Google AI Studio para aumentar esses limites —
+// o custo do modelo Flash por reuniao costuma ser bem baixo, mas confirme o preco atual antes.
 
-// thinkingLevel 'low' reduz o "raciocinio" interno do modelo (Gemini 3.x pensa por padrao,
-// o que pode deixar chamadas com textos maiores bem mais lentas — mesmo dentro do limite
-// de 30s do Netlify). Isso mantem a resposta rapida sem perder qualidade perceptivel numa
-// tarefa de resumo/extracao como esta.
+// thinkingLevel 'low' reduz o "raciocinio" interno do modelo (Gemini 3.x pensa por padrao, o que
+// pode deixar chamadas com textos maiores bem mais lentas — mesmo dentro do limite de 30s do
+// Netlify). Isso mantem a resposta rapida sem perder qualidade perceptivel numa tarefa de
+// resumo/extracao como esta.
 const THINKING_CONFIG = { thinkingLevel: 'low' };
 
 const MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
-const CHUNK_CHAR_LIMIT = 18000;
-const MAX_CHUNKS = 6;
+// ~150 mil caracteres cobre uma reuniao de varias horas numa unica chamada (context window do
+// Flash e enorme). So divide em pedacos em casos realmente extremos — e ai, em poucos pedacos.
+const CHUNK_CHAR_LIMIT = 150000;
+const MAX_CHUNKS = 3;
 
 function splitIntoChunks(text) {
   if (text.length <= CHUNK_CHAR_LIMIT) return [text];
@@ -175,6 +184,9 @@ ${transcriptSection}
   } catch (e) {
     if (e.name === 'AbortError') {
       return { statusCode: 504, body: JSON.stringify({ error: 'A IA demorou demais para responder. Tente novamente — para reuniões muito longas, isso pode acontecer ocasionalmente.' }) };
+    }
+    if (e.statusCode === 429) {
+      return { statusCode: 429, body: JSON.stringify({ error: 'O limite gratuito da IA (chamadas por minuto/dia) foi atingido. Aguarde um pouco e tente novamente — se isso acontecer com frequência, pode ser necessário habilitar faturamento no Google AI Studio para aumentar o limite.' }) };
     }
     return { statusCode: e.statusCode || 500, body: JSON.stringify({ error: 'Falha ao chamar a API do Gemini: ' + e.message }) };
   } finally {
