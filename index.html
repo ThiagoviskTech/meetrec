@@ -283,7 +283,15 @@
   function buildRecognition(){
     const r = new SpeechRecognition();
     r.lang = 'pt-BR';
-    r.continuous = true;
+    // IMPORTANTE: continuous=false, de proposito. Com continuous=true por muito tempo, o motor
+    // de voz do Chrome no Android tem um bug conhecido: de vez em quando ele reprocessa o mesmo
+    // audio internamente e devolve a MESMA fala como resultado "final" 2 ou 3 vezes, em indices
+    // diferentes — por isso a transcricao repetia (nao era so um problema de indice/contagem,
+    // era o motor de reconhecimento reouvindo o mesmo trecho de audio). A correcao e nao deixar
+    // uma unica sessao de reconhecimento rodar continuamente: cada sessao capta so uma
+    // fala/frase e termina sozinha; nos reiniciamos na hora (ver onend, abaixo), o que pro
+    // usuario parece continuo mas evita esse reprocessamento interno.
+    r.continuous = false;
     r.interimResults = true;
 
     r.onresult = (event) => {
@@ -291,8 +299,8 @@
       for (let i = 0; i < event.results.length; i++){
         const res = event.results[i];
         if (res.isFinal){
-          // So consolida resultados que ainda nao tinham sido contados — evita duplicar
-          // a mesma fala quando o navegador reenvia resultados antigos (comum no Android).
+          // Guarda extra contra reprocessar o mesmo indice dentro de uma mesma sessao
+          // (finalizedCount e zerado a cada reinicio, logo abaixo e no restart do onend).
           if (i >= finalizedCount){
             finalTranscript += res[0].transcript + ' ';
             finalizedCount = i + 1;
@@ -316,7 +324,9 @@
       }
     };
 
-    // Mobile Chrome frequently ends the session after a pause — auto-restart transparently.
+    // Com continuous=false, a sessao termina sozinha depois de cada fala/pausa — reiniciamos
+    // na hora pra parecer continuo. O atraso e curto de proposito (mas nao zero, pra dar tempo
+    // do navegador liberar o reconhecimento anterior e nao dar erro de "ja iniciado").
     r.onend = () => {
       recognizing = false;
       if (!userStopped){
@@ -328,7 +338,7 @@
             setStatus('Gravando…', true);
           }
           catch(e){ /* already started */ }
-        }, 250);
+        }, 120);
       }
     };
 
