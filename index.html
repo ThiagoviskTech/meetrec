@@ -97,6 +97,14 @@
     Este navegador não tem suporte a reconhecimento de voz contínuo. Use o <b>Chrome</b> (Android ou desktop) para gravar e transcrever.
   </div>
 
+  <div id="draftBanner" class="warn hidden" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+    <span id="draftBannerText"></span>
+    <span style="display:flex; gap:8px; flex:none;">
+      <button class="btn-secondary" id="restoreDraftBtn" style="flex:none; padding:6px 10px; font-size:13px;">Restaurar</button>
+      <button class="btn-secondary" id="discardDraftBtn" style="flex:none; padding:6px 10px; font-size:13px;">Descartar</button>
+    </span>
+  </div>
+
   <div class="card" id="recorderCard">
     <div class="fields">
       <div>
@@ -146,7 +154,8 @@
   </div>
 
   <p class="footer-note">
-    A gravação usa o reconhecimento de voz do navegador. O indicador de microfone do sistema/navegador continua visível normalmente — isso não pode e não deve ser ocultado.
+    A gravação usa o reconhecimento de voz do navegador. O indicador de microfone do sistema/navegador continua visível normalmente — isso não pode e não deve ser ocultado.<br>
+    Em reuniões longas, o app mantém a tela ligada e salva a transcrição automaticamente a cada minuto. Mantenha o Chrome aberto e em primeiro plano durante a gravação.
   </p>
 </div>
 
@@ -160,6 +169,7 @@
   const resultCard = $('resultCard'), resultLoading = $('resultLoading'), resultContent = $('resultContent');
   const historyBtn = $('historyBtn'), historyCard = $('historyCard'), historyList = $('historyList'), historyEmpty = $('historyEmpty');
   const unsupportedWarn = $('unsupportedWarn');
+  const draftBanner = $('draftBanner'), draftBannerText = $('draftBannerText'), restoreDraftBtn = $('restoreDraftBtn'), discardDraftBtn = $('discardDraftBtn');
 
   let recognition = null;
   let recognizing = false;
@@ -173,6 +183,9 @@
   // a 0), o que fazia a mesma fala ser adicionada de novo — daí a repeticao. Contar por aqui
   // evita reprocessar o que ja foi consolidado.
   let finalizedCount = 0;
+  let wakeLock = null;
+  let autosaveTimer = null;
+  let draftRestored = false;
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -198,6 +211,74 @@
     statusText.textContent = text;
     statusDot.classList.toggle('live', !!live);
   }
+
+  // ---- Manter a tela ligada durante reuniões longas ----
+  async function requestWakeLock(){
+    try {
+      if ('wakeLock' in navigator){
+        wakeLock = await navigator.wakeLock.request('screen');
+      }
+    } catch(e){ /* pode falhar (ex: aba em segundo plano) — sem problema, tentamos de novo depois */ }
+  }
+
+  function releaseWakeLock(){
+    if (wakeLock){
+      wakeLock.release().catch(()=>{});
+      wakeLock = null;
+    }
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && recognizing && !wakeLock){
+      requestWakeLock();
+    }
+  });
+
+  // ---- Rascunho automático (proteção contra fechar o navegador sem querer) ----
+  function saveDraft(){
+    if (!finalTranscript) return;
+    try {
+      localStorage.setItem('meetrec_draft', JSON.stringify({
+        title: titleInput.value,
+        participants: participantsInput.value,
+        topics: topicsInput.value,
+        transcript: finalTranscript,
+        savedAt: Date.now()
+      }));
+    } catch(e){ /* localStorage cheio ou indisponível — sem problema, só perde o autosave */ }
+  }
+
+  function clearDraft(){
+    localStorage.removeItem('meetrec_draft');
+  }
+
+  function tryLoadDraft(){
+    try {
+      const raw = localStorage.getItem('meetrec_draft');
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (!draft || !draft.transcript) return;
+      const ageMin = (Date.now() - draft.savedAt) / 60000;
+      if (ageMin > 360){ clearDraft(); return; } // descarta rascunhos com mais de 6h
+      draftBannerText.textContent = 'Encontramos uma gravação não finalizada de ' + new Date(draft.savedAt).toLocaleString('pt-BR') + '. Restaurar?';
+      draftBanner.classList.remove('hidden');
+      restoreDraftBtn.onclick = () => {
+        titleInput.value = draft.title || '';
+        participantsInput.value = draft.participants || '';
+        topicsInput.value = draft.topics || '';
+        finalTranscript = draft.transcript;
+        draftRestored = true;
+        renderTranscript();
+        draftBanner.classList.add('hidden');
+      };
+      discardDraftBtn.onclick = () => {
+        clearDraft();
+        draftBanner.classList.add('hidden');
+      };
+    } catch(e){ /* rascunho corrompido — ignora */ }
+  }
+
+  tryLoadDraft();
 
   function buildRecognition(){
     const r = new SpeechRecognition();
@@ -264,7 +345,11 @@
 
   startBtn.addEventListener('click', async () => {
     resultCard.classList.add('hidden');
-    finalTranscript = '';
+    draftBanner.classList.add('hidden');
+    if (!draftRestored){
+      finalTranscript = '';
+    }
+    draftRestored = false;
     interimTranscript = '';
     finalizedCount = 0;
     renderTranscript();
@@ -285,6 +370,8 @@
       recognizing = true;
       setStatus('Gravando…', true);
       toggleButtons(true);
+      requestWakeLock();
+      autosaveTimer = setInterval(saveDraft, 60000);
     } catch (e){
       setStatus('Erro ao iniciar gravação', false);
     }
@@ -293,6 +380,8 @@
   stopBtn.addEventListener('click', async () => {
     userStopped = true;
     clearTimeout(restartTimer);
+    clearInterval(autosaveTimer);
+    releaseWakeLock();
     if (recognition) recognition.stop();
     setStatus('Processando com IA…', false);
     toggleButtons(false);
@@ -339,6 +428,7 @@
         transcript,
         summary: data
       });
+      clearDraft();
       setStatus('Pronto para gravar', false);
     } catch (e){
       resultContent.innerHTML = '<p class="muted">Erro ao gerar o resumo: ' + escapeHtml(e.message) + '</p>';
