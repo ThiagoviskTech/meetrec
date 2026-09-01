@@ -12,6 +12,12 @@
 // e so entao combinados numa chamada final — o tempo total fica limitado ao pedaco mais
 // lento, nao a soma de todos.
 
+// thinkingLevel 'low' reduz o "raciocinio" interno do modelo (Gemini 3.x pensa por padrao,
+// o que pode deixar chamadas com textos maiores bem mais lentas — mesmo dentro do limite
+// de 30s do Netlify). Isso mantem a resposta rapida sem perder qualidade perceptivel numa
+// tarefa de resumo/extracao como esta.
+const THINKING_CONFIG = { thinkingLevel: 'low' };
+
 const MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
@@ -61,7 +67,7 @@ ${chunk}
 """`;
   const text = await callGemini(apiKey, signal, {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: { maxOutputTokens: 600 }
+    generationConfig: { maxOutputTokens: 600, thinkingConfig: THINKING_CONFIG }
   });
   return text.trim();
 }
@@ -153,7 +159,8 @@ ${transcriptSection}
       contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
       generationConfig: {
         responseMimeType: 'application/json',
-        maxOutputTokens: 2000
+        maxOutputTokens: 2000,
+        thinkingConfig: THINKING_CONFIG
       }
     });
 
