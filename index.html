@@ -168,6 +168,11 @@
   let interimTranscript = '';
   let restartTimer = null;
   let lastMeeting = null;
+  // Quantos resultados de results[] ja foram consolidados em finalTranscript nesta sessao
+  // de reconhecimento. No Android/Chrome, event.resultIndex nao e confiavel (as vezes volta
+  // a 0), o que fazia a mesma fala ser adicionada de novo — daí a repeticao. Contar por aqui
+  // evita reprocessar o que ja foi consolidado.
+  let finalizedCount = 0;
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -202,10 +207,15 @@
 
     r.onresult = (event) => {
       interimTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; i++){
+      for (let i = 0; i < event.results.length; i++){
         const res = event.results[i];
         if (res.isFinal){
-          finalTranscript += res[0].transcript + ' ';
+          // So consolida resultados que ainda nao tinham sido contados — evita duplicar
+          // a mesma fala quando o navegador reenvia resultados antigos (comum no Android).
+          if (i >= finalizedCount){
+            finalTranscript += res[0].transcript + ' ';
+            finalizedCount = i + 1;
+          }
         } else {
           interimTranscript += res[0].transcript;
         }
@@ -230,7 +240,12 @@
       recognizing = false;
       if (!userStopped){
         restartTimer = setTimeout(() => {
-          try { recognition.start(); recognizing = true; setStatus('Gravando…', true); }
+          try {
+            finalizedCount = 0; // nova sessao de reconhecimento = results[] reinicia do zero
+            recognition.start();
+            recognizing = true;
+            setStatus('Gravando…', true);
+          }
           catch(e){ /* already started */ }
         }, 250);
       }
@@ -251,6 +266,7 @@
     resultCard.classList.add('hidden');
     finalTranscript = '';
     interimTranscript = '';
+    finalizedCount = 0;
     renderTranscript();
     userStopped = false;
 
@@ -304,7 +320,16 @@
           topicsHint: topicsInput.value || ''
         })
       });
-      const data = await res.json();
+      const rawBody = await res.text();
+      let data;
+      try {
+        data = JSON.parse(rawBody);
+      } catch (e){
+        // O servidor devolveu algo que nao e JSON (ex: pagina de erro do Netlify por timeout).
+        throw new Error(res.status === 504 || res.status === 502
+          ? 'O servidor demorou demais para responder. Tente novamente — se a reunião foi muito longa, isso pode acontecer.'
+          : 'O servidor respondeu de forma inesperada (status ' + res.status + '). Tente novamente.');
+      }
       if (!res.ok) throw new Error(data.error || 'Erro ao gerar resumo');
 
       renderResult(data);
