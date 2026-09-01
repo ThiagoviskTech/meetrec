@@ -107,6 +107,10 @@
         <label for="participantsInput">Participantes (opcional, separados por vírgula)</label>
         <input type="text" id="participantsInput" placeholder="Ex: Thiago, Drieli, Cliente Y">
       </div>
+      <div>
+        <label for="topicsInput">Tópicos sugeridos (opcional, separados por vírgula)</label>
+        <input type="text" id="topicsInput" placeholder="Ex: fechamento fiscal, proposta do cliente X">
+      </div>
     </div>
 
     <div class="status-row">
@@ -130,7 +134,8 @@
     <div id="resultLoading" class="hidden muted"><span class="spinner"></span>Gerando tópicos, resumo e plano de ação…</div>
     <div id="resultContent" class="result"></div>
     <div class="btn-row" style="margin-top:14px;">
-      <button class="btn-secondary" id="downloadBtn">⬇️ Baixar (.md)</button>
+      <button class="btn-secondary" id="downloadTranscriptBtn">📝 Transcrição (.txt)</button>
+      <button class="btn-secondary" id="downloadSummaryBtn">📄 Resumo (Word)</button>
     </div>
   </div>
 
@@ -151,7 +156,7 @@
   const startBtn = $('startBtn'), stopBtn = $('stopBtn');
   const statusDot = $('statusDot'), statusText = $('statusText');
   const transcriptBox = $('transcriptBox');
-  const titleInput = $('titleInput'), participantsInput = $('participantsInput');
+  const titleInput = $('titleInput'), participantsInput = $('participantsInput'), topicsInput = $('topicsInput');
   const resultCard = $('resultCard'), resultLoading = $('resultLoading'), resultContent = $('resultContent');
   const historyBtn = $('historyBtn'), historyCard = $('historyCard'), historyList = $('historyList'), historyEmpty = $('historyEmpty');
   const unsupportedWarn = $('unsupportedWarn');
@@ -239,6 +244,7 @@
     stopBtn.classList.toggle('hidden', !isRecording);
     titleInput.disabled = isRecording;
     participantsInput.disabled = isRecording;
+    topicsInput.disabled = isRecording;
   }
 
   startBtn.addEventListener('click', async () => {
@@ -294,7 +300,8 @@
         body: JSON.stringify({
           transcript,
           title: titleInput.value || '',
-          participantsHint: participantsInput.value || ''
+          participantsHint: participantsInput.value || '',
+          topicsHint: topicsInput.value || ''
         })
       });
       const data = await res.json();
@@ -337,19 +344,57 @@
     lastMeeting = data;
   }
 
-  $('downloadBtn').addEventListener('click', () => {
-    const data = lastMeeting || {};
-    let md = '# ' + (titleInput.value || 'Reunião') + '\n\n';
-    if (data.resumo) md += '## Resumo\n' + data.resumo + '\n\n';
-    if (data.topicos) md += '## Tópicos\n' + data.topicos.map(t => '- ' + t).join('\n') + '\n\n';
-    if (data.participantes) md += '## Participantes\n' + data.participantes.map(t => '- ' + t).join('\n') + '\n\n';
-    if (data.plano_de_acao) md += '## Plano de ação\n' + data.plano_de_acao.map(i => '- ' + (i.tarefa||i.item||'') + (i.responsavel ? ' — ' + i.responsavel : '') + (i.prazo ? ' (' + i.prazo + ')' : '')).join('\n') + '\n\n';
-    md += '## Transcrição completa\n' + finalTranscript;
-    const blob = new Blob([md], { type: 'text/markdown' });
+  function baseName(){
+    return (titleInput.value || 'reuniao').replace(/[^\w\-]+/g,'_');
+  }
+
+  function triggerDownload(blob, filename){
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = (titleInput.value || 'reuniao').replace(/[^\w\-]+/g,'_') + '.md';
+    a.download = filename;
     a.click();
+  }
+
+  // Transcrição completa, em texto puro — abre em Bloco de Notas, Word, etc.
+  $('downloadTranscriptBtn').addEventListener('click', () => {
+    const dataHora = new Date().toLocaleString('pt-BR');
+    let txt = (titleInput.value || 'Reunião') + '\n';
+    txt += dataHora + '\n';
+    if (participantsInput.value) txt += 'Participantes: ' + participantsInput.value + '\n';
+    txt += '\n---\n\n';
+    txt += (finalTranscript || '(sem transcrição)');
+    const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+    triggerDownload(blob, baseName() + '_transcricao.txt');
+  });
+
+  // Resumo gerado pela IA, como documento do Word (.doc) — separado da transcrição.
+  $('downloadSummaryBtn').addEventListener('click', () => {
+    const data = lastMeeting;
+    if (!data){
+      alert('Gere o resumo primeiro (toque em "Parar e gerar resumo").');
+      return;
+    }
+    const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    let body = '<h1>' + esc(titleInput.value || 'Resumo da reunião') + '</h1>';
+    body += '<p><i>' + esc(new Date().toLocaleString('pt-BR')) + '</i></p>';
+    if (data.resumo) body += '<h2>Resumo</h2><p>' + esc(data.resumo) + '</p>';
+    if (data.topicos && data.topicos.length){
+      body += '<h2>Tópicos discutidos</h2><ul>' + data.topicos.map(t => '<li>' + esc(t) + '</li>').join('') + '</ul>';
+    }
+    if (data.participantes && data.participantes.length){
+      body += '<h2>Participantes</h2><ul>' + data.participantes.map(t => '<li>' + esc(t) + '</li>').join('') + '</ul>';
+    }
+    if (data.plano_de_acao && data.plano_de_acao.length){
+      body += '<h2>Plano de ação</h2><table border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse;width:100%;">';
+      body += '<tr><th align="left">Tarefa</th><th align="left">Responsável</th><th align="left">Prazo</th></tr>';
+      body += data.plano_de_acao.map(i => '<tr><td>' + esc(i.tarefa||i.item||'') + '</td><td>' + esc(i.responsavel||'-') + '</td><td>' + esc(i.prazo||'-') + '</td></tr>').join('');
+      body += '</table>';
+    }
+    const html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">'
+      + '<head><meta charset="utf-8"><title>' + esc(titleInput.value || 'Resumo') + '</title></head>'
+      + '<body style="font-family:Calibri,Arial,sans-serif;">' + body + '</body></html>';
+    const blob = new Blob(['﻿', html], { type: 'application/msword' });
+    triggerDownload(blob, baseName() + '_resumo.doc');
   });
 
   // ---- Local history (localStorage) ----
