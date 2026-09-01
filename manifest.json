@@ -1,0 +1,13 @@
+{
+  "name": "MeetRec",
+  "short_name": "MeetRec",
+  "description": "Transcricao e resumo de reunioes com IA",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0f1115",
+  "theme_color": "#14161a",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
+
