@@ -1,23 +1,24 @@
 // Netlify Function: claude-proxy.js
-// Recebe a transcricao de uma reuniao e usa a API da Anthropic (Claude) para
+// Recebe a transcricao de uma reuniao e usa a API gratuita do Google Gemini para
 // extrair topicos, participantes, resumo e plano de acao.
 //
-// Requer a variavel de ambiente ANTHROPIC_API_KEY configurada no Netlify
-// (Site settings > Environment variables). A chave NUNCA e exposta ao navegador.
+// Requer a variavel de ambiente GEMINI_API_KEY configurada no Netlify
+// (Site settings > Environment variables). Chave gratuita em https://aistudio.google.com/apikey
+// A chave NUNCA e exposta ao navegador.
 
-const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5-20250929';
+const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ error: 'Metodo nao permitido' }) };
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'ANTHROPIC_API_KEY nao configurada no Netlify (Site settings > Environment variables).' })
+      body: JSON.stringify({ error: 'GEMINI_API_KEY nao configurada no Netlify (Site settings > Environment variables). Gere uma chave gratuita em aistudio.google.com/apikey.' })
     };
   }
 
@@ -37,7 +38,7 @@ exports.handler = async (event) => {
 
   const systemPrompt = `Voce e um assistente que transforma transcricoes brutas de reunioes (geradas por reconhecimento de voz, entao podem ter erros de transcricao e falta de pontuacao) em notas de reuniao estruturadas, em portugues do Brasil.
 
-Responda APENAS com um JSON valido, sem markdown, sem texto antes ou depois, no seguinte formato exato:
+Responda APENAS com um JSON valido, no seguinte formato exato:
 
 {
   "resumo": "resumo executivo em 1-2 paragrafos curtos",
@@ -64,40 +65,37 @@ ${transcript}
 """`;
 
   try {
-    const resp = await fetch(ANTHROPIC_API_URL, {
+    const resp = await fetch(`${GEMINI_API_URL}?key=${encodeURIComponent(apiKey)}`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
-      },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 2000,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }]
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          maxOutputTokens: 2000
+        }
       })
     });
 
     const data = await resp.json();
 
     if (!resp.ok) {
-      const msg = (data && data.error && data.error.message) ? data.error.message : 'Erro na API da Anthropic';
+      const msg = (data && data.error && data.error.message) ? data.error.message : 'Erro na API do Gemini';
       return { statusCode: resp.status, body: JSON.stringify({ error: msg }) };
     }
 
-    const raw = (data.content && data.content[0] && data.content[0].text) || '{}';
-    const cleaned = raw.trim().replace(/^```json\s*/i, '').replace(/^```\s*/,'').replace(/```\s*$/,'');
+    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
 
     let parsed;
     try {
-      parsed = JSON.parse(cleaned);
+      parsed = JSON.parse(raw);
     } catch (e) {
       return { statusCode: 502, body: JSON.stringify({ error: 'A IA retornou um formato inesperado. Tente novamente.' }) };
     }
 
     return { statusCode: 200, body: JSON.stringify(parsed) };
   } catch (e) {
-    return { statusCode: 500, body: JSON.stringify({ error: 'Falha ao chamar a API da Anthropic: ' + e.message }) };
+    return { statusCode: 500, body: JSON.stringify({ error: 'Falha ao chamar a API do Gemini: ' + e.message }) };
   }
 };
