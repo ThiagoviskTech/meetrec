@@ -6,3 +6,9 @@
   from = "/api/claude"
   to = "/.netlify/functions/claude-proxy"
   status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
