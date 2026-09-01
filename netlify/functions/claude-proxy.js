@@ -67,10 +67,17 @@ Transcricao:
 ${transcript}
 """`;
 
+  // O Netlify mata a funcao aos 30s. Damos timeout na chamada do Gemini um pouco antes
+  // disso pra sempre conseguir devolver um JSON de erro amigavel, em vez do Netlify
+  // devolver uma pagina HTML de timeout (que quebra o JSON.parse no front-end).
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25000);
+
   try {
     const resp = await fetch(`${GEMINI_API_URL}?key=${encodeURIComponent(apiKey)}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({
         system_instruction: { parts: [{ text: systemPrompt }] },
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
@@ -99,6 +106,11 @@ ${transcript}
 
     return { statusCode: 200, body: JSON.stringify(parsed) };
   } catch (e) {
+    if (e.name === 'AbortError') {
+      return { statusCode: 504, body: JSON.stringify({ error: 'A IA demorou demais para responder. Tente novamente — se a reuniao for muito longa, considere gerar o resumo em partes.' }) };
+    }
     return { statusCode: 500, body: JSON.stringify({ error: 'Falha ao chamar a API do Gemini: ' + e.message }) };
+  } finally {
+    clearTimeout(timeout);
   }
 };
