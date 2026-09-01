@@ -2,1363 +2,394 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>MeetRec — Gravador de Reuniões</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MeetRec</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#14161a">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
 <style>
-  :root {
-    --bg: #0a0a0f;
-    --surface: #13131a;
-    --surface2: #1c1c27;
-    --border: #2a2a3d;
-    --accent: #6c63ff;
-    --accent2: #ff6584;
-    --accent3: #43e97b;
-    --text: #e8e8f0;
-    --text-muted: #7070a0;
-    --text-dim: #4a4a6a;
-    --recording: #ff4757;
-    --radius: 16px;
-    --radius-sm: 10px;
-  }
-
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'DM Mono', monospace;
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
-
-  /* Background grid */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(108,99,255,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(108,99,255,0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  .app {
-    position: relative;
-    z-index: 1;
-    max-width: 480px;
-    margin: 0 auto;
-    padding: 0 0 100px;
-  }
-
-  /* Header */
-  .header {
-    padding: 28px 20px 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .logo {
-    font-family: 'Syne', sans-serif;
-    font-weight: 800;
-    font-size: 22px;
-    letter-spacing: -0.5px;
-  }
-
-  .logo span { color: var(--accent); }
-
-  .status-pill {
-    font-size: 11px;
-    padding: 4px 12px;
-    border-radius: 999px;
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    letter-spacing: 0.5px;
-  }
-
-  .status-pill.active {
-    border-color: var(--recording);
-    color: var(--recording);
-    animation: pulse-border 1.5s infinite;
-  }
-
-  @keyframes pulse-border {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(255,71,87,0.3); }
-    50% { box-shadow: 0 0 0 4px rgba(255,71,87,0); }
-  }
-
-  /* Tabs */
-  .tabs {
-    display: flex;
-    gap: 4px;
-    padding: 0 20px;
-    margin-bottom: 24px;
-  }
-
-  .tab {
-    flex: 1;
-    padding: 10px;
-    text-align: center;
-    font-family: 'Syne', sans-serif;
-    font-size: 13px;
-    font-weight: 600;
-    border: none;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition: all 0.2s;
-    background: var(--surface);
-    color: var(--text-muted);
-  }
-
-  .tab.active {
-    background: var(--accent);
-    color: white;
-  }
-
-  /* Pages */
-  .page { display: none; padding: 0 20px; }
-  .page.active { display: block; }
-
-  /* Recorder card */
-  .recorder-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 28px 20px;
-    margin-bottom: 20px;
-    text-align: center;
-  }
-
-  .rec-title {
-    font-family: 'Syne', sans-serif;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 2px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    margin-bottom: 24px;
-  }
-
-  /* Waveform visual */
-  .waveform {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    height: 60px;
-    margin-bottom: 24px;
-  }
-
-  .bar {
-    width: 4px;
-    background: var(--border);
-    border-radius: 2px;
-    transition: height 0.1s;
-  }
-
-  .recording .bar {
-    background: var(--recording);
-    animation: wave var(--d, 0.8s) ease-in-out infinite alternate;
-    animation-delay: var(--delay, 0s);
-  }
-
-  @keyframes wave {
-    from { height: 6px; }
-    to { height: var(--h, 40px); }
-  }
-
-  /* Timer */
-  .timer {
-    font-family: 'Syne', sans-serif;
-    font-size: 42px;
-    font-weight: 800;
-    letter-spacing: -2px;
-    margin-bottom: 8px;
-    color: var(--text);
-  }
-
-  .timer.active { color: var(--recording); }
-
-  .timer-label {
-    font-size: 11px;
-    color: var(--text-dim);
-    margin-bottom: 28px;
-  }
-
-  /* Buttons */
-  .btn-record {
-    width: 72px;
-    height: 72px;
-    border-radius: 50%;
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 16px;
-    font-size: 24px;
-    transition: all 0.2s;
-    background: var(--accent);
-    box-shadow: 0 0 0 0 rgba(108,99,255,0.4);
-  }
-
-  .btn-record:hover { transform: scale(1.05); }
-  .btn-record.recording {
-    background: var(--recording);
-    box-shadow: 0 0 0 8px rgba(255,71,87,0.15);
-    animation: pulse-rec 1.5s infinite;
-  }
-
-  @keyframes pulse-rec {
-    0%, 100% { box-shadow: 0 0 0 8px rgba(255,71,87,0.15); }
-    50% { box-shadow: 0 0 0 16px rgba(255,71,87,0.05); }
-  }
-
-  .btn-action {
-    padding: 10px 20px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text-muted);
-    font-family: 'DM Mono', monospace;
-    font-size: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
-    margin: 0 4px;
-  }
-
-  .btn-action:hover { border-color: var(--accent); color: var(--accent); }
-
-  .btn-primary {
-    padding: 14px 24px;
-    border-radius: var(--radius-sm);
-    border: none;
-    background: var(--accent);
-    color: white;
-    font-family: 'Syne', sans-serif;
-    font-weight: 700;
-    font-size: 13px;
-    cursor: pointer;
-    width: 100%;
-    transition: all 0.2s;
-    letter-spacing: 0.5px;
-  }
-
-  .btn-primary:hover { background: #7c74ff; }
-  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-
-  /* Meeting name input */
-  .input-group {
-    margin-bottom: 16px;
-    text-align: left;
-  }
-
-  .input-label {
-    font-size: 11px;
-    color: var(--text-muted);
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-    display: block;
-  }
-
-  .input-field {
-    width: 100%;
-    padding: 12px 16px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    color: var(--text);
-    font-family: 'DM Mono', monospace;
-    font-size: 14px;
-    outline: none;
-    transition: border-color 0.2s;
-  }
-
-  .input-field:focus { border-color: var(--accent); }
-
-  /* Speakers */
-  .speakers-section {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px;
-    margin-bottom: 20px;
-  }
-
-  .section-title {
-    font-family: 'Syne', sans-serif;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    margin-bottom: 14px;
-  }
-
-  .speaker-list { display: flex; flex-direction: column; gap: 8px; }
-
-  .speaker-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    background: var(--surface2);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-  }
-
-  .speaker-avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: 'Syne', sans-serif;
-    font-weight: 700;
-    font-size: 13px;
-    flex-shrink: 0;
-  }
-
-  .speaker-name {
-    flex: 1;
-    font-size: 13px;
-    color: var(--text);
-  }
-
-  .speaker-remove {
-    background: none;
-    border: none;
-    color: var(--text-dim);
-    cursor: pointer;
-    font-size: 16px;
-    padding: 2px;
-    transition: color 0.2s;
-  }
-  .speaker-remove:hover { color: var(--accent2); }
-
-  .add-speaker {
-    display: flex;
-    gap: 8px;
-    margin-top: 10px;
-  }
-
-  .add-speaker .input-field { flex: 1; padding: 10px 12px; font-size: 13px; }
-
-  .btn-add {
-    padding: 10px 16px;
-    background: var(--accent);
-    border: none;
-    border-radius: var(--radius-sm);
-    color: white;
-    font-size: 18px;
-    cursor: pointer;
-    transition: all 0.2s;
-    flex-shrink: 0;
-  }
-  .btn-add:hover { background: #7c74ff; }
-
-  /* Processing overlay */
-  .processing {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 40px 20px;
-    text-align: center;
-    margin-bottom: 20px;
-  }
-
-  .processing-icon {
-    font-size: 40px;
-    margin-bottom: 16px;
-    animation: spin 2s linear infinite;
-    display: inline-block;
-  }
-
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-
-  .processing-title {
-    font-family: 'Syne', sans-serif;
-    font-weight: 700;
-    font-size: 18px;
-    margin-bottom: 8px;
-  }
-
-  .processing-sub { color: var(--text-muted); font-size: 13px; }
-
-  .progress-bar {
-    height: 3px;
-    background: var(--surface2);
-    border-radius: 2px;
-    margin-top: 20px;
-    overflow: hidden;
-  }
-
-  .progress-fill {
-    height: 100%;
-    background: var(--accent);
-    border-radius: 2px;
-    transition: width 0.3s;
-  }
-
-  /* Result card */
-  .result-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px;
-    margin-bottom: 16px;
-  }
-
-  .result-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 16px;
-    padding-bottom: 14px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .result-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: var(--radius-sm);
-    background: var(--surface2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-  }
-
-  .result-meta h3 {
-    font-family: 'Syne', sans-serif;
-    font-size: 14px;
-    font-weight: 700;
-  }
-  .result-meta p { font-size: 11px; color: var(--text-muted); }
-
-  /* Summary */
-  .summary-text {
-    font-size: 13px;
-    line-height: 1.7;
-    color: var(--text);
-  }
-
-  /* Transcript */
-  .transcript-line {
-    display: flex;
-    gap: 12px;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .transcript-line:last-child { border-bottom: none; }
-
-  .tr-speaker {
-    display: flex;
-    align-items: flex-start;
-    gap: 6px;
-    min-width: 90px;
-    flex-shrink: 0;
-  }
-
-  .tr-avatar {
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 9px;
-    font-weight: 700;
-    font-family: 'Syne', sans-serif;
-    flex-shrink: 0;
-    margin-top: 1px;
-  }
-
-  .tr-name {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--text-muted);
-    word-break: break-word;
-    line-height: 1.4;
-    margin-top: 2px;
-  }
-
-  .tr-text {
-    font-size: 13px;
-    line-height: 1.6;
-    color: var(--text);
-    flex: 1;
-  }
-
-  /* Action items */
-  .action-item {
-    display: flex;
-    gap: 10px;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border);
-    font-size: 13px;
-    line-height: 1.5;
-  }
-  .action-item:last-child { border-bottom: none; }
-  .action-bullet {
-    color: var(--accent3);
-    font-size: 16px;
-    flex-shrink: 0;
-    margin-top: -1px;
-  }
-
-  /* History page */
-  .history-empty {
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--text-dim);
-  }
-  .history-empty .icon { font-size: 48px; margin-bottom: 16px; }
-  .history-empty p { font-size: 13px; line-height: 1.6; }
-
-  .history-item {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px;
-    margin-bottom: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  .history-item:hover { border-color: var(--accent); }
-
-  .hi-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 8px;
-  }
-
-  .hi-name {
-    font-family: 'Syne', sans-serif;
-    font-size: 14px;
-    font-weight: 700;
-    flex: 1;
-    margin-right: 10px;
-  }
-
-  .hi-date {
-    font-size: 11px;
-    color: var(--text-dim);
-    white-space: nowrap;
-  }
-
-  .hi-meta {
-    display: flex;
-    gap: 12px;
-    font-size: 11px;
-    color: var(--text-muted);
-  }
-
-  .hi-tag {
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-  }
-
-  .hi-summary {
-    font-size: 12px;
-    color: var(--text-muted);
-    margin-top: 8px;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    line-height: 1.5;
-  }
-
-  .hi-delete {
-    background: none;
-    border: none;
-    color: var(--text-dim);
-    cursor: pointer;
-    font-size: 16px;
-    padding: 4px;
-    transition: color 0.2s;
-    flex-shrink: 0;
-  }
-  .hi-delete:hover { color: var(--accent2); }
-
-  /* Detail view */
-  .detail-back {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    color: var(--accent);
-    cursor: pointer;
-    margin-bottom: 20px;
-    background: none;
-    border: none;
-    padding: 0;
-  }
-
-  /* Toast */
-  .toast {
-    position: fixed;
-    bottom: 80px;
-    left: 50%;
-    transform: translateX(-50%) translateY(20px);
-    background: var(--surface2);
-    border: 1px solid var(--accent);
-    border-radius: var(--radius-sm);
-    padding: 12px 20px;
-    font-size: 13px;
-    color: var(--text);
-    z-index: 100;
-    opacity: 0;
-    transition: all 0.3s;
-    white-space: nowrap;
-    max-width: 90vw;
-    text-align: center;
-  }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-
-  /* Bottom nav */
-  .bottom-nav {
-    position: fixed;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 100%;
-    max-width: 480px;
-    background: rgba(19,19,26,0.95);
-    border-top: 1px solid var(--border);
-    display: flex;
-    backdrop-filter: blur(10px);
-    z-index: 50;
-  }
-
-  .nav-item {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 12px 8px;
-    cursor: pointer;
-    font-size: 10px;
-    color: var(--text-dim);
-    transition: color 0.2s;
-    border: none;
-    background: none;
-    font-family: 'DM Mono', monospace;
-    gap: 4px;
-  }
-  .nav-item .icon { font-size: 20px; }
-  .nav-item.active { color: var(--accent); }
-
-  /* Chips */
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-  .chip {
-    padding: 4px 10px;
-    border-radius: 999px;
-    font-size: 11px;
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    background: var(--surface2);
-  }
-
-  /* Colors for speakers */
-  .c0 { background: rgba(108,99,255,0.2); color: #a09bff; }
-  .c1 { background: rgba(255,101,132,0.2); color: #ff8fa6; }
-  .c2 { background: rgba(67,233,123,0.2); color: #7fffa0; }
-  .c3 { background: rgba(255,200,80,0.2); color: #ffd070; }
-  .c4 { background: rgba(80,200,255,0.2); color: #80d9ff; }
-
-  .divider {
-    height: 1px;
-    background: var(--border);
-    margin: 16px 0;
-  }
-
-  /* Audio player */
-  .audio-section {
-    margin-bottom: 16px;
-  }
-  audio {
-    width: 100%;
-    border-radius: var(--radius-sm);
-    outline: none;
-  }
-
-  .no-audio {
-    padding: 12px;
-    background: var(--surface2);
-    border-radius: var(--radius-sm);
-    font-size: 12px;
-    color: var(--text-muted);
-    text-align: center;
-  }
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1f232c; --border:#2a2f3a;
+    --text:#e8eaed; --muted:#9aa2b1; --accent:#6c8cff; --accent2:#8b6cff;
+    --danger:#e0556f; --ok:#5bc98a; --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    min-height:100vh; padding-bottom:40px;
+  }
+  header{
+    padding:18px 18px 10px; display:flex; align-items:center; justify-content:space-between;
+  }
+  header h1{font-size:19px; margin:0; font-weight:600; letter-spacing:.2px;}
+  header h1 span{color:var(--accent);}
+  .container{max-width:720px; margin:0 auto; padding:0 16px;}
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:var(--radius);
+    padding:18px; margin-bottom:16px;
+  }
+  .status-row{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); margin-bottom:14px; min-height:18px;}
+  .dot{width:8px; height:8px; border-radius:50%; background:var(--muted); flex:none;}
+  .dot.live{background:var(--danger); animation:pulse 1.6s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  .fields{display:flex; flex-direction:column; gap:10px; margin-bottom:14px;}
+  input[type=text]{
+    width:100%; background:var(--panel2); border:1px solid var(--border); color:var(--text);
+    padding:11px 12px; border-radius:10px; font-size:15px; outline:none;
+  }
+  input[type=text]:focus{border-color:var(--accent);}
+  label{font-size:12px; color:var(--muted); margin-bottom:4px; display:block;}
+  .btn-row{display:flex; gap:10px;}
+  button{
+    border:none; border-radius:10px; padding:13px 16px; font-size:15px; font-weight:600;
+    cursor:pointer; flex:1; transition:opacity .15s;
+  }
+  button:disabled{opacity:.4; cursor:default;}
+  .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff;}
+  .btn-stop{background:var(--danger); color:#fff;}
+  .btn-secondary{background:var(--panel2); color:var(--text); border:1px solid var(--border);}
+  .btn-secondary:not(:disabled):hover, .btn-primary:not(:disabled):hover, .btn-stop:not(:disabled):hover{opacity:.88;}
+  .transcript{
+    white-space:pre-wrap; font-size:14.5px; line-height:1.55; max-height:280px; overflow-y:auto;
+    color:var(--text); background:var(--panel2); border:1px solid var(--border); border-radius:10px;
+    padding:12px; min-height:60px;
+  }
+  .transcript .interim{color:var(--muted);}
+  .muted{color:var(--muted); font-size:13px;}
+  .section-title{font-size:13px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin:0 0 8px;}
+  .result h3{font-size:15px; margin:18px 0 6px;}
+  .result h3:first-child{margin-top:0;}
+  .result ul{margin:4px 0; padding-left:20px;}
+  .result li{margin-bottom:4px; font-size:14.5px; line-height:1.5;}
+  .result p{font-size:14.5px; line-height:1.6; margin:4px 0;}
+  .action-item{background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:14px;}
+  .action-item b{color:var(--accent);}
+  .spinner{
+    width:16px; height:16px; border:2px solid var(--border); border-top-color:var(--accent);
+    border-radius:50%; animation:spin .8s linear infinite; display:inline-block; vertical-align:-3px; margin-right:6px;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .history-item{
+    display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);
+    cursor:pointer; font-size:14px;
+  }
+  .history-item:last-child{border-bottom:none;}
+  .history-item small{color:var(--muted); display:block; font-size:12px; margin-top:2px;}
+  .icon-btn{background:transparent; border:none; color:var(--muted); font-size:18px; padding:4px 8px; flex:none;}
+  .warn{background:#3a2a20; border:1px solid #5a4130; color:#f0c896; padding:10px 12px; border-radius:10px; font-size:13px; margin-bottom:14px;}
+  .footer-note{font-size:12px; color:var(--muted); text-align:center; margin-top:20px; line-height:1.6;}
+  a{color:var(--accent);}
+  .hidden{display:none !important;}
 </style>
 </head>
 <body>
+<header>
+  <h1>Meet<span>Rec</span></h1>
+  <button class="icon-btn" id="historyBtn" title="Histórico">🗂️</button>
+</header>
 
-<div class="app">
-  <div class="header">
-    <div class="logo">Meet<span>Rec</span></div>
-    <div class="status-pill" id="statusPill">PRONTO</div>
+<div class="container">
+
+  <div id="unsupportedWarn" class="warn hidden">
+    Este navegador não tem suporte a reconhecimento de voz contínuo. Use o <b>Chrome</b> (Android ou desktop) para gravar e transcrever.
   </div>
 
-  <div class="tabs">
-    <button class="tab active" onclick="showTab('record')">⏺ Gravar</button>
-    <button class="tab" onclick="showTab('history')">📋 Histórico</button>
-  </div>
-
-  <!-- RECORD PAGE -->
-  <div class="page active" id="page-record">
-
-    <!-- Setup (before recording) -->
-    <div id="setupSection">
-      <div class="recorder-card">
-        <div class="rec-title">NOVA REUNIÃO</div>
-
-        <div class="input-group" style="text-align:left">
-          <label class="input-label">Nome da Reunião</label>
-          <input type="text" class="input-field" id="meetingName" placeholder="ex: Alinhamento Mensal">
-        </div>
-
-        <div class="waveform" id="waveform">
-          <!-- bars geradas por JS -->
-        </div>
-
-        <div class="timer" id="timer">00:00</div>
-        <div class="timer-label" id="timerLabel">Pressione para iniciar</div>
-
-        <button class="btn-record" id="btnRecord" onclick="toggleRecord()">🎙️</button>
-
-        <div id="recActions" style="display:none; margin-top:8px;">
-          <button class="btn-action" onclick="cancelRecord()">✕ Cancelar</button>
-          <button class="btn-action" onclick="stopAndProcess()">⬛ Parar e Processar</button>
-        </div>
+  <div class="card" id="recorderCard">
+    <div class="fields">
+      <div>
+        <label for="titleInput">Título da reunião</label>
+        <input type="text" id="titleInput" placeholder="Ex: Reunião com cliente X">
       </div>
-
-      <div class="speakers-section" style="margin-bottom:16px">
-        <div class="section-title">Chave de API (Anthropic)</div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <input type="password" class="input-field" id="apiKeyInput" placeholder="sk-ant-..." style="flex:1;font-size:12px" oninput="saveApiKey(this.value)">
-          <span id="apiKeyStatus" style="font-size:18px;flex-shrink:0">🔴</span>
-        </div>
-        <div style="font-size:11px;color:var(--text-dim);margin-top:6px">Salva localmente no seu dispositivo. Nunca compartilhada.</div>
-      </div>
-
-      <div class="speakers-section">
-        <div class="section-title">Participantes</div>
-        <div class="speaker-list" id="speakerList"></div>
-        <div class="add-speaker">
-          <input type="text" class="input-field" id="speakerInput" placeholder="Nome do participante..." onkeydown="if(event.key==='Enter')addSpeaker()">
-          <button class="btn-add" onclick="addSpeaker()">+</button>
-        </div>
+      <div>
+        <label for="participantsInput">Participantes (opcional, separados por vírgula)</label>
+        <input type="text" id="participantsInput" placeholder="Ex: Thiago, Drieli, Cliente Y">
       </div>
     </div>
 
-    <!-- Processing -->
-    <div id="processingSection" style="display:none;">
-      <div class="processing">
-        <div class="processing-icon">⚙️</div>
-        <div class="processing-title">Processando reunião...</div>
-        <div class="processing-sub" id="processingStep">Transcrevendo áudio</div>
-        <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
-      </div>
+    <div class="status-row">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">Pronto para gravar</span>
     </div>
 
-    <!-- Result -->
-    <div id="resultSection" style="display:none;"></div>
-
+    <div class="btn-row">
+      <button class="btn-primary" id="startBtn">🎙️ Iniciar gravação</button>
+      <button class="btn-stop hidden" id="stopBtn">⏹️ Parar e gerar resumo</button>
+    </div>
   </div>
 
-  <!-- HISTORY PAGE -->
-  <div class="page" id="page-history">
+  <div class="card" id="transcriptCard">
+    <p class="section-title">Transcrição</p>
+    <div class="transcript" id="transcriptBox"><span class="muted">A transcrição aparece aqui em tempo real…</span></div>
+  </div>
+
+  <div class="card hidden" id="resultCard">
+    <p class="section-title">Resumo gerado por IA</p>
+    <div id="resultLoading" class="hidden muted"><span class="spinner"></span>Gerando tópicos, resumo e plano de ação…</div>
+    <div id="resultContent" class="result"></div>
+    <div class="btn-row" style="margin-top:14px;">
+      <button class="btn-secondary" id="downloadBtn">⬇️ Baixar (.md)</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="historyCard">
+    <p class="section-title">Reuniões salvas</p>
     <div id="historyList"></div>
+    <p class="muted" id="historyEmpty">Nenhuma reunião salva ainda.</p>
   </div>
 
+  <p class="footer-note">
+    A gravação usa o reconhecimento de voz do navegador. O indicador de microfone do sistema/navegador continua visível normalmente — isso não pode e não deve ser ocultado.
+  </p>
 </div>
-
-<!-- Bottom Nav -->
-<div class="bottom-nav">
-  <button class="nav-item active" id="nav-record" onclick="showTab('record')">
-    <span class="icon">🎙️</span>gravar
-  </button>
-  <button class="nav-item" id="nav-history" onclick="showTab('history')">
-    <span class="icon">📋</span>histórico
-  </button>
-</div>
-
-<div class="toast" id="toast"></div>
 
 <script>
-// ==================== ESTADO ====================
-let isRecording = false;
-let mediaRecorder = null;
-let recognition = null;
-let liveTranscript = "";
-let audioChunks = [];
-let timerInterval = null;
-let seconds = 0;
-let audioBlob = null;
-let speakers = ['Thiago'];
-let currentMeeting = null;
+(function(){
+  const $ = id => document.getElementById(id);
+  const startBtn = $('startBtn'), stopBtn = $('stopBtn');
+  const statusDot = $('statusDot'), statusText = $('statusText');
+  const transcriptBox = $('transcriptBox');
+  const titleInput = $('titleInput'), participantsInput = $('participantsInput');
+  const resultCard = $('resultCard'), resultLoading = $('resultLoading'), resultContent = $('resultContent');
+  const historyBtn = $('historyBtn'), historyCard = $('historyCard'), historyList = $('historyList'), historyEmpty = $('historyEmpty');
+  const unsupportedWarn = $('unsupportedWarn');
 
-const COLORS = ['c0','c1','c2','c3','c4'];
+  let recognition = null;
+  let recognizing = false;
+  let userStopped = false;
+  let finalTranscript = '';
+  let interimTranscript = '';
+  let restartTimer = null;
+  let lastMeeting = null;
 
-// ==================== INIT ====================
-document.addEventListener('DOMContentLoaded', () => {
-  buildWaveform();
-  renderSpeakers();
-  renderHistory();
-  speakers = ['Thiago'];
-  renderSpeakers();
-  loadApiKey();
-});
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-function loadApiKey() {
-  try {
-    const key = localStorage.getItem('meetrec_apikey') || '';
-    if (key) {
-      document.getElementById('apiKeyInput').value = key;
-      document.getElementById('apiKeyStatus').textContent = '🟢';
+  if (!SpeechRecognition) {
+    unsupportedWarn.classList.remove('hidden');
+    startBtn.disabled = true;
+  }
+
+  function renderTranscript(){
+    if (!finalTranscript && !interimTranscript){
+      transcriptBox.innerHTML = '<span class="muted">A transcrição aparece aqui em tempo real…</span>';
+      return;
     }
-  } catch(e) {}
-}
-
-function saveApiKey(val) {
-  try {
-    localStorage.setItem('meetrec_apikey', val.trim());
-    document.getElementById('apiKeyStatus').textContent = val.trim().startsWith('sk-ant-') ? '🟢' : '🔴';
-  } catch(e) {}
-}
-
-function getApiKey() {
-  try { return localStorage.getItem('meetrec_apikey') || ''; } catch(e) { return ''; }
-}
-
-function buildWaveform() {
-  const wf = document.getElementById('waveform');
-  wf.innerHTML = '';
-  const heights = [10,18,28,40,32,20,36,44,30,22,38,26,42,20,14];
-  heights.forEach((h, i) => {
-    const bar = document.createElement('div');
-    bar.className = 'bar';
-    bar.style.height = '6px';
-    bar.style.setProperty('--h', h + 'px');
-    bar.style.setProperty('--delay', (i * 0.06) + 's');
-    bar.style.setProperty('--d', (0.6 + Math.random()*0.5) + 's');
-    wf.appendChild(bar);
-  });
-}
-
-// ==================== SPEAKERS ====================
-function addSpeaker() {
-  const input = document.getElementById('speakerInput');
-  const name = input.value.trim();
-  if (!name) return;
-  if (speakers.includes(name)) { showToast('Participante já adicionado'); return; }
-  speakers.push(name);
-  input.value = '';
-  renderSpeakers();
-}
-
-function removeSpeaker(name) {
-  speakers = speakers.filter(s => s !== name);
-  renderSpeakers();
-}
-
-function renderSpeakers() {
-  const list = document.getElementById('speakerList');
-  list.innerHTML = '';
-  if (speakers.length === 0) {
-    list.innerHTML = '<div style="font-size:12px;color:var(--text-dim);text-align:center;padding:8px">Nenhum participante adicionado</div>';
-    return;
+    transcriptBox.innerHTML = escapeHtml(finalTranscript) + (interimTranscript ? '<span class="interim">' + escapeHtml(interimTranscript) + '</span>' : '');
+    transcriptBox.scrollTop = transcriptBox.scrollHeight;
   }
-  speakers.forEach((name, i) => {
-    list.innerHTML += `
-      <div class="speaker-item">
-        <div class="speaker-avatar ${COLORS[i % COLORS.length]}">${initials(name)}</div>
-        <div class="speaker-name">${name}</div>
-        <button class="speaker-remove" onclick="removeSpeaker('${name}')">✕</button>
-      </div>`;
-  });
-}
 
-function initials(name) {
-  return name.split(' ').map(w => w[0]).join('').substring(0,2).toUpperCase();
-}
-
-// ==================== RECORDING ====================
-async function toggleRecord() {
-  if (!isRecording) {
-    await startRecord();
+  function escapeHtml(s){
+    return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
   }
-}
 
-async function startRecord() {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioChunks = [];
-    mediaRecorder = new MediaRecorder(stream);
-    mediaRecorder.ondataavailable = e => { if(e.data.size > 0) audioChunks.push(e.data); };
-    mediaRecorder.start(1000);
+  function setStatus(text, live){
+    statusText.textContent = text;
+    statusDot.classList.toggle('live', !!live);
+  }
 
-    // Iniciar transcrição em tempo real
-    liveTranscript = "";
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      recognition = new SpeechRecognition();
-      recognition.lang = 'pt-BR';
-      recognition.continuous = true;
-      recognition.interimResults = false;
-      recognition.onresult = e => {
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          if (e.results[i].isFinal) {
-            liveTranscript += e.results[i][0].transcript + ' ';
-          }
+  function buildRecognition(){
+    const r = new SpeechRecognition();
+    r.lang = 'pt-BR';
+    r.continuous = true;
+    r.interimResults = true;
+
+    r.onresult = (event) => {
+      interimTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++){
+        const res = event.results[i];
+        if (res.isFinal){
+          finalTranscript += res[0].transcript + ' ';
+        } else {
+          interimTranscript += res[0].transcript;
         }
-      };
-      recognition.onerror = () => {};
-      recognition.onend = () => { if (isRecording) try { recognition.start(); } catch(e) {} };
-      try { recognition.start(); } catch(e) {}
+      }
+      renderTranscript();
+    };
+
+    r.onerror = (event) => {
+      if (event.error === 'no-speech' || event.error === 'audio-capture'){
+        return; // will auto-restart via onend
+      }
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed'){
+        setStatus('Permissão de microfone negada', false);
+        userStopped = true;
+        recognizing = false;
+        toggleButtons(false);
+      }
+    };
+
+    // Mobile Chrome frequently ends the session after a pause — auto-restart transparently.
+    r.onend = () => {
+      recognizing = false;
+      if (!userStopped){
+        restartTimer = setTimeout(() => {
+          try { recognition.start(); recognizing = true; setStatus('Gravando…', true); }
+          catch(e){ /* already started */ }
+        }, 250);
+      }
+    };
+
+    return r;
+  }
+
+  function toggleButtons(isRecording){
+    startBtn.classList.toggle('hidden', isRecording);
+    stopBtn.classList.toggle('hidden', !isRecording);
+    titleInput.disabled = isRecording;
+    participantsInput.disabled = isRecording;
+  }
+
+  startBtn.addEventListener('click', async () => {
+    resultCard.classList.add('hidden');
+    finalTranscript = '';
+    interimTranscript = '';
+    renderTranscript();
+    userStopped = false;
+
+    try {
+      // Ask for the mic explicitly so the permission prompt appears up front.
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(t => t.stop());
+    } catch (e){
+      setStatus('Não foi possível acessar o microfone', false);
+      return;
     }
 
-    isRecording = true;
-    seconds = 0;
-    startTimer();
-
-    document.getElementById('btnRecord').classList.add('recording');
-    document.getElementById('btnRecord').innerHTML = '⏸';
-    document.getElementById('statusPill').textContent = '● GRAVANDO';
-    document.getElementById('statusPill').classList.add('active');
-    document.getElementById('timerLabel').textContent = 'Gravando...';
-    document.getElementById('recActions').style.display = 'block';
-    document.getElementById('waveform').classList.add('recording');
-    showToast('Gravação iniciada!');
-
-  } catch(err) {
-    showToast('❌ Permissão de microfone negada. Libere nas configurações do Chrome.');
-    console.error(err);
-  }
-}
-
-function stopRecord() {
-  return new Promise(resolve => {
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      mediaRecorder.onstop = () => {
-        audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        mediaRecorder.stream.getTracks().forEach(t => t.stop());
-        if (recognition) { try { recognition.stop(); } catch(e) {} recognition = null; }
-        resolve();
-      };
-      mediaRecorder.stop();
-    } else {
-      resolve();
+    recognition = buildRecognition();
+    try {
+      recognition.start();
+      recognizing = true;
+      setStatus('Gravando…', true);
+      toggleButtons(true);
+    } catch (e){
+      setStatus('Erro ao iniciar gravação', false);
     }
   });
-}
 
-function cancelRecord() {
-  if (mediaRecorder) {
-    mediaRecorder.stream.getTracks().forEach(t => t.stop());
-    mediaRecorder = null;
-  }
-  if (recognition) { try { recognition.stop(); } catch(e) {} recognition = null; }
-  liveTranscript = "";
-  clearInterval(timerInterval);
-  resetRecorderUI();
-  showToast('Gravação cancelada');
-}
+  stopBtn.addEventListener('click', async () => {
+    userStopped = true;
+    clearTimeout(restartTimer);
+    if (recognition) recognition.stop();
+    setStatus('Processando com IA…', false);
+    toggleButtons(false);
+    await generateSummary();
+  });
 
-function resetRecorderUI() {
-  isRecording = false;
-  seconds = 0;
-  document.getElementById('timer').textContent = '00:00';
-  document.getElementById('timer').classList.remove('active');
-  document.getElementById('timerLabel').textContent = 'Pressione para iniciar';
-  document.getElementById('btnRecord').classList.remove('recording');
-  document.getElementById('btnRecord').innerHTML = '🎙️';
-  document.getElementById('statusPill').textContent = 'PRONTO';
-  document.getElementById('statusPill').classList.remove('active');
-  document.getElementById('recActions').style.display = 'none';
-  document.getElementById('waveform').classList.remove('recording');
-}
+  async function generateSummary(){
+    const transcript = (finalTranscript + ' ' + interimTranscript).trim();
+    if (!transcript){
+      setStatus('Nenhuma fala detectada', false);
+      return;
+    }
+    resultCard.classList.remove('hidden');
+    resultLoading.classList.remove('hidden');
+    resultContent.innerHTML = '';
 
-async function stopAndProcess() {
-  clearInterval(timerInterval);
-  const duration = seconds;
-  await stopRecord();
-  isRecording = false;
-  resetRecorderUI();
+    try {
+      const res = await fetch('/.netlify/functions/claude-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript,
+          title: titleInput.value || '',
+          participantsHint: participantsInput.value || ''
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao gerar resumo');
 
-  const meetingName = document.getElementById('meetingName').value.trim() || 'Reunião ' + new Date().toLocaleDateString('pt-BR');
-  currentMeeting = { name: meetingName, duration, speakers: [...speakers], date: new Date() };
-
-  showProcessing();
-  await processAudio();
-}
-
-// ==================== TIMER ====================
-function startTimer() {
-  document.getElementById('timer').classList.add('active');
-  timerInterval = setInterval(() => {
-    seconds++;
-    document.getElementById('timer').textContent = formatTime(seconds);
-  }, 1000);
-}
-
-function formatTime(s) {
-  const m = Math.floor(s / 60).toString().padStart(2,'0');
-  const sec = (s % 60).toString().padStart(2,'0');
-  return `${m}:${sec}`;
-}
-
-// ==================== PROCESSING ====================
-function showProcessing() {
-  document.getElementById('setupSection').style.display = 'none';
-  document.getElementById('processingSection').style.display = 'block';
-  document.getElementById('resultSection').style.display = 'none';
-}
-
-async function processAudio() {
-  const steps = [
-    { label: 'Transcrevendo áudio...', pct: 20 },
-    { label: 'Identificando falantes...', pct: 45 },
-    { label: 'Gerando resumo com IA...', pct: 70 },
-    { label: 'Extraindo pontos de ação...', pct: 90 },
-    { label: 'Finalizando...', pct: 100 },
-  ];
-
-  for (const step of steps) {
-    document.getElementById('processingStep').textContent = step.label;
-    document.getElementById('progressFill').style.width = step.pct + '%';
-    await sleep(900);
+      renderResult(data);
+      saveMeeting({
+        title: titleInput.value || 'Reunião ' + new Date().toLocaleDateString('pt-BR'),
+        date: new Date().toISOString(),
+        transcript,
+        summary: data
+      });
+      setStatus('Pronto para gravar', false);
+    } catch (e){
+      resultContent.innerHTML = '<p class="muted">Erro ao gerar o resumo: ' + escapeHtml(e.message) + '</p>';
+      setStatus('Pronto para gravar', false);
+    } finally {
+      resultLoading.classList.add('hidden');
+    }
   }
 
-  // Get transcript via Web Speech API (if available) or simulate
-  let transcriptText = '';
-  try {
-    transcriptText = await transcribeAudio();
-  } catch(e) {
-    transcriptText = '';
+  function renderResult(data){
+    let html = '';
+    if (data.resumo) html += '<h3>Resumo</h3><p>' + escapeHtml(data.resumo) + '</p>';
+    if (data.topicos && data.topicos.length){
+      html += '<h3>Tópicos discutidos</h3><ul>' + data.topicos.map(t => '<li>' + escapeHtml(t) + '</li>').join('') + '</ul>';
+    }
+    if (data.participantes && data.participantes.length){
+      html += '<h3>Participantes</h3><ul>' + data.participantes.map(t => '<li>' + escapeHtml(t) + '</li>').join('') + '</ul>';
+    }
+    if (data.plano_de_acao && data.plano_de_acao.length){
+      html += '<h3>Plano de ação</h3>' + data.plano_de_acao.map(item => {
+        const tarefa = escapeHtml(item.tarefa || item.item || '');
+        const resp = item.responsavel ? ' — <b>' + escapeHtml(item.responsavel) + '</b>' : '';
+        const prazo = item.prazo ? ' (' + escapeHtml(item.prazo) + ')' : '';
+        return '<div class="action-item">' + tarefa + resp + prazo + '</div>';
+      }).join('');
+    }
+    resultContent.innerHTML = html || '<p class="muted">Nenhum conteúdo retornado.</p>';
+    lastMeeting = data;
   }
 
-  // Generate AI analysis
-  const result = await generateAnalysis(transcriptText);
-  showResult(result);
-}
+  $('downloadBtn').addEventListener('click', () => {
+    const data = lastMeeting || {};
+    let md = '# ' + (titleInput.value || 'Reunião') + '\n\n';
+    if (data.resumo) md += '## Resumo\n' + data.resumo + '\n\n';
+    if (data.topicos) md += '## Tópicos\n' + data.topicos.map(t => '- ' + t).join('\n') + '\n\n';
+    if (data.participantes) md += '## Participantes\n' + data.participantes.map(t => '- ' + t).join('\n') + '\n\n';
+    if (data.plano_de_acao) md += '## Plano de ação\n' + data.plano_de_acao.map(i => '- ' + (i.tarefa||i.item||'') + (i.responsavel ? ' — ' + i.responsavel : '') + (i.prazo ? ' (' + i.prazo + ')' : '')).join('\n') + '\n\n';
+    md += '## Transcrição completa\n' + finalTranscript;
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (titleInput.value || 'reuniao').replace(/[^\w\-]+/g,'_') + '.md';
+    a.click();
+  });
 
-async function transcribeAudio() {
-  return liveTranscript.trim();
-}
-
-async function generateAnalysis(transcriptText) {
-  const speakerList = currentMeeting.speakers.join(', ');
-  const durationMin = Math.ceil(currentMeeting.duration / 60);
-  const hasRealTranscript = transcriptText && transcriptText.length > 20;
-
-  const prompt = hasRealTranscript
-    ? `Você é um assistente especializado em análise de reuniões corporativas brasileiras.
-Analise a seguinte transcrição de uma reunião de ${durationMin} minutos com os participantes: ${speakerList}.
-Nome da reunião: "${currentMeeting.name}"
-
-Transcrição:
-${transcriptText}
-
-Retorne SOMENTE um JSON válido (sem markdown) com esta estrutura exata:
-{
-  "resumo": "parágrafo conciso resumindo o que foi discutido",
-  "pontos_acao": ["ação 1", "ação 2", "ação 3"],
-  "transcript_segmentado": [
-    {"speaker": "nome", "texto": "fala do participante"},
-    {"speaker": "nome", "texto": "outra fala"}
-  ],
-  "palavras_chave": ["palavra1", "palavra2", "palavra3", "palavra4"]
-}`
-    : `Você é um assistente especializado em análise de reuniões corporativas brasileiras.
-Uma reunião de ${durationMin} minutos foi gravada com os participantes: ${speakerList}.
-Nome da reunião: "${currentMeeting.name}"
-
-Não há transcrição disponível (API de fala não suportada neste dispositivo). Gere um exemplo realista de como seria o resultado desta reunião, considerando que são profissionais de contabilidade/negócios.
-
-Retorne SOMENTE um JSON válido (sem markdown) com esta estrutura exata:
-{
-  "resumo": "parágrafo conciso e realista resumindo o que poderia ter sido discutido numa reunião desse tipo",
-  "pontos_acao": ["ação 1", "ação 2", "ação 3"],
-  "transcript_segmentado": [
-    {"speaker": "${currentMeeting.speakers[0] || 'Participante'}", "texto": "fala exemplo realista"},
-    {"speaker": "${currentMeeting.speakers[1] || currentMeeting.speakers[0] || 'Participante'}", "texto": "outra fala exemplo"}
-  ],
-  "palavras_chave": ["palavra1", "palavra2", "palavra3"],
-  "aviso": "Transcrição automática não disponível. Este é um exemplo gerado por IA."
-}`;
-
-  const apiKey = getApiKey() || "proxy";
-  if (false) {
-    return {
-      resumo: `Reunião "${currentMeeting.name}" processada. Configure a chave de API para gerar análise automática.`,
-      pontos_acao: ['Adicionar chave de API nas configurações', 'Gravar novamente para gerar análise'],
-      transcript_segmentado: currentMeeting.speakers.map((s, i) => ({
-        speaker: s,
-        texto: i === 0 ? 'Abertura da reunião.' : 'Participação na reunião.'
-      })),
-      palavras_chave: ['reunião'],
-      aviso: 'Chave de API não configurada. Adicione sua chave sk-ant-... no campo acima.'
-    };
+  // ---- Local history (localStorage) ----
+  function saveMeeting(meeting){
+    const list = JSON.parse(localStorage.getItem('meetrec_history') || '[]');
+    list.unshift(meeting);
+    localStorage.setItem('meetrec_history', JSON.stringify(list.slice(0, 50)));
   }
 
-  try {
-    const response = await fetch("/api/claude", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1000,
-        messages: [{ role: "user", content: prompt }]
-      })
+  function loadHistory(){
+    const list = JSON.parse(localStorage.getItem('meetrec_history') || '[]');
+    historyList.innerHTML = '';
+    historyEmpty.classList.toggle('hidden', list.length > 0);
+    list.forEach((m, idx) => {
+      const div = document.createElement('div');
+      div.className = 'history-item';
+      const d = new Date(m.date);
+      div.innerHTML = '<div>' + escapeHtml(m.title) + '<small>' + d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) + '</small></div><span>›</span>';
+      div.addEventListener('click', () => {
+        titleInput.value = m.title;
+        finalTranscript = m.transcript;
+        interimTranscript = '';
+        renderTranscript();
+        resultCard.classList.remove('hidden');
+        renderResult(m.summary);
+        historyCard.classList.add('hidden');
+      });
+      historyList.appendChild(div);
     });
-
-    const data = await response.json();
-    const text = data.content.map(i => i.text || '').join('');
-    const clean = text.replace(/```json|```/g, '').trim();
-    return JSON.parse(clean);
-  } catch(err) {
-    console.error('API error:', err);
-    return {
-      resumo: `Reunião "${currentMeeting.name}" com duração de ${durationMin} minutos. Não foi possível gerar análise automática no momento.`,
-      pontos_acao: ['Revisar manualmente a gravação', 'Definir próximos passos', 'Agendar follow-up'],
-      transcript_segmentado: currentMeeting.speakers.map((s, i) => ({
-        speaker: s,
-        texto: i === 0 ? 'Abertura da reunião e apresentação dos temas.' : 'Contribuições e discussões sobre os pontos levantados.'
-      })),
-      palavras_chave: ['reunião', 'ação', 'follow-up'],
-      aviso: 'Análise de IA indisponível no momento.'
-    };
-  }
-}
-
-// ==================== RESULT ====================
-function showResult(data) {
-  document.getElementById('processingSection').style.display = 'none';
-
-  // Save to history
-  const meeting = {
-    ...currentMeeting,
-    id: Date.now(),
-    data,
-    audioUrl: audioBlob ? URL.createObjectURL(audioBlob) : null,
-    dateStr: currentMeeting.date.toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' })
-  };
-  saveToHistory(meeting);
-
-  renderResult(meeting, document.getElementById('resultSection'));
-  document.getElementById('resultSection').style.display = 'block';
-  showToast('✅ Reunião processada!');
-}
-
-function renderResult(meeting, container) {
-  const data = meeting.data;
-  const warn = data.aviso ? `<div style="padding:10px 12px;background:rgba(255,200,80,0.08);border:1px solid rgba(255,200,80,0.2);border-radius:8px;font-size:11px;color:#ffd070;margin-bottom:16px">⚠️ ${data.aviso}</div>` : '';
-
-  const audioHtml = meeting.audioUrl
-    ? `<div class="audio-section">
-        <div class="section-title" style="margin-bottom:8px">🎵 ÁUDIO GRAVADO</div>
-        <audio controls src="${meeting.audioUrl}"></audio>
-       </div>`
-    : `<div class="audio-section"><div class="no-audio">Áudio não disponível para reprodução</div></div>`;
-
-  const transcriptHtml = data.transcript_segmentado.map((line, i) => {
-    const spIdx = meeting.speakers ? meeting.speakers.indexOf(line.speaker) : -1;
-    const colorClass = COLORS[spIdx >= 0 ? spIdx % COLORS.length : i % COLORS.length];
-    return `<div class="transcript-line">
-      <div class="tr-speaker">
-        <div class="tr-avatar ${colorClass}">${initials(line.speaker)}</div>
-        <div class="tr-name">${line.speaker}</div>
-      </div>
-      <div class="tr-text">${line.texto}</div>
-    </div>`;
-  }).join('');
-
-  const actionsHtml = data.pontos_acao.map(a =>
-    `<div class="action-item"><span class="action-bullet">→</span><span>${a}</span></div>`
-  ).join('');
-
-  const keywordsHtml = data.palavras_chave
-    ? data.palavras_chave.map(k => `<span class="chip">${k}</span>`).join('')
-    : '';
-
-  container.innerHTML = `
-    <button class="detail-back" onclick="newMeeting()">← Nova Gravação</button>
-    ${warn}
-
-    ${audioHtml}
-
-    <div class="result-card">
-      <div class="result-header">
-        <div class="result-icon">📝</div>
-        <div class="result-meta">
-          <h3>${meeting.name}</h3>
-          <p>${meeting.dateStr} · ${Math.ceil(meeting.duration/60)} min · ${meeting.speakers.length} participante(s)</p>
-        </div>
-      </div>
-      <div class="section-title" style="margin-bottom:8px">RESUMO</div>
-      <div class="summary-text">${data.resumo}</div>
-      ${keywordsHtml ? `<div class="chips">${keywordsHtml}</div>` : ''}
-    </div>
-
-    <div class="result-card">
-      <div class="section-title" style="margin-bottom:12px">TRANSCRIÇÃO</div>
-      ${transcriptHtml}
-    </div>
-
-    <div class="result-card">
-      <div class="section-title" style="margin-bottom:12px">PONTOS DE AÇÃO</div>
-      ${actionsHtml}
-    </div>
-
-    <button class="btn-primary" onclick="exportTxt(${meeting.id})">⬇️ Exportar como TXT</button>
-    <div style="height:12px"></div>
-  `;
-}
-
-function newMeeting() {
-  document.getElementById('resultSection').style.display = 'none';
-  document.getElementById('setupSection').style.display = 'block';
-  document.getElementById('meetingName').value = '';
-  audioBlob = null;
-  speakers = ['Thiago'];
-  renderSpeakers();
-}
-
-// ==================== HISTORY ====================
-function saveToHistory(meeting) {
-  const history = getHistory();
-  // Remove audio url from saved data (can't persist blob url)
-  const toSave = { ...meeting, audioUrl: null };
-  history.unshift(toSave);
-  try { localStorage.setItem('meetrec_history', JSON.stringify(history.slice(0, 50))); } catch(e) {}
-}
-
-function getHistory() {
-  try { return JSON.parse(localStorage.getItem('meetrec_history') || '[]'); } catch(e) { return []; }
-}
-
-function deleteFromHistory(id) {
-  const history = getHistory().filter(m => m.id !== id);
-  try { localStorage.setItem('meetrec_history', JSON.stringify(history)); } catch(e) {}
-  renderHistory();
-  showToast('Reunião removida');
-}
-
-function renderHistory() {
-  const container = document.getElementById('historyList');
-  const history = getHistory();
-
-  if (history.length === 0) {
-    container.innerHTML = `
-      <div class="history-empty">
-        <div class="icon">📋</div>
-        <p>Nenhuma reunião gravada ainda.<br>Grave sua primeira reunião!</p>
-      </div>`;
-    return;
   }
 
-  container.innerHTML = history.map(m => `
-    <div class="history-item" onclick="showHistoryDetail(${m.id})">
-      <div class="hi-top">
-        <div class="hi-name">${m.name}</div>
-        <button class="hi-delete" onclick="event.stopPropagation();deleteFromHistory(${m.id})">🗑️</button>
-      </div>
-      <div class="hi-meta">
-        <span>${m.dateStr || new Date(m.date).toLocaleDateString('pt-BR')}</span>
-        <span class="hi-tag">${Math.ceil(m.duration/60)} min</span>
-        <span class="hi-tag">${m.speakers ? m.speakers.length : 1} pessoa(s)</span>
-      </div>
-      <div class="hi-summary">${m.data ? m.data.resumo : ''}</div>
-    </div>`).join('');
-}
+  historyBtn.addEventListener('click', () => {
+    historyCard.classList.toggle('hidden');
+    if (!historyCard.classList.contains('hidden')) loadHistory();
+  });
 
-function showHistoryDetail(id) {
-  const meeting = getHistory().find(m => m.id === id);
-  if (!meeting) return;
-
-  const container = document.getElementById('historyList');
-  container.innerHTML = '';
-  const back = document.createElement('button');
-  back.className = 'detail-back';
-  back.innerHTML = '← Voltar';
-  back.onclick = () => renderHistory();
-  container.appendChild(back);
-
-  const div = document.createElement('div');
-  renderResult(meeting, div);
-  container.appendChild(div);
-}
-
-// ==================== EXPORT ====================
-function exportTxt(id) {
-  const history = getHistory();
-  const meeting = id ? history.find(m => m.id === id) : null;
-  const m = meeting || currentMeeting;
-  if (!m || !m.data) return;
-
-  const d = m.data;
-  let txt = `MEETREC — RELATÓRIO DE REUNIÃO\n`;
-  txt += `${'='.repeat(40)}\n\n`;
-  txt += `Reunião: ${m.name}\n`;
-  txt += `Data: ${m.dateStr || new Date(m.date).toLocaleDateString('pt-BR')}\n`;
-  txt += `Duração: ${Math.ceil(m.duration/60)} minutos\n`;
-  txt += `Participantes: ${(m.speakers||[]).join(', ')}\n\n`;
-  txt += `RESUMO\n${'─'.repeat(30)}\n${d.resumo}\n\n`;
-  txt += `PONTOS DE AÇÃO\n${'─'.repeat(30)}\n`;
-  d.pontos_acao.forEach((a,i) => txt += `${i+1}. ${a}\n`);
-  txt += `\nTRANSCRIÇÃO\n${'─'.repeat(30)}\n`;
-  d.transcript_segmentado.forEach(l => txt += `[${l.speaker}]: ${l.texto}\n`);
-  txt += `\n--- Gerado por MeetRec ---\n`;
-
-  const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `meetrec-${(m.name||'reuniao').replace(/\s+/g,'-').toLowerCase()}.txt`;
-  a.click();
-  URL.revokeObjectURL(url);
-  showToast('📄 TXT exportado!');
-}
-
-// ==================== UI HELPERS ====================
-function showTab(tab) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-
-  document.getElementById('page-' + tab).classList.add('active');
-  document.querySelector(`.tab[onclick="showTab('${tab}')"]`).classList.add('active');
-  document.getElementById('nav-' + tab).classList.add('active');
-
-  if (tab === 'history') renderHistory();
-}
-
-function showToast(msg) {
-  const toast = document.getElementById('toast');
-  toast.textContent = msg;
-  toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 3000);
-}
-
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+  if ('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  }
+})();
 </script>
 </body>
 </html>
