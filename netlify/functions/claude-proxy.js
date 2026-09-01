@@ -6,7 +6,7 @@
 // (Site settings > Environment variables). Chave gratuita em https://aistudio.google.com/apikey
 // A chave NUNCA e exposta ao navegador.
 
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 exports.handler = async (event) => {
