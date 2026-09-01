@@ -35,6 +35,7 @@ exports.handler = async (event) => {
   }
   const title = (payload.title || '').trim();
   const participantsHint = (payload.participantsHint || '').trim();
+  const topicsHint = (payload.topicsHint || '').trim();
 
   const systemPrompt = `Voce e um assistente que transforma transcricoes brutas de reunioes (geradas por reconhecimento de voz, entao podem ter erros de transcricao e falta de pontuacao) em notas de reuniao estruturadas, em portugues do Brasil.
 
@@ -52,12 +53,14 @@ Responda APENAS com um JSON valido, no seguinte formato exato:
 Regras:
 - Se a lista de participantes informada pelo usuario estiver disponivel, use-a como base e complete com nomes claramente mencionados na transcricao.
 - Se nenhum participante puder ser identificado, retorne uma lista vazia.
+- Se o usuario sugerir topicos, priorize inclui-los em "topicos" quando fizerem sentido com o conteudo da transcricao (nao invente algo que nao tenha relacao nenhuma com a fala).
 - Se nao houver itens de acao claros, retorne "plano_de_acao": [].
 - Corrija erros obvios de transcricao por contexto, mas nao invente informacoes que nao estao no texto.
 - Seja objetivo e evite repetir a transcricao literalmente no resumo.`;
 
   const userPrompt = `Titulo da reuniao: ${title || '(nao informado)'}
 Participantes informados manualmente: ${participantsHint || '(nao informado)'}
+Topicos sugeridos pelo usuario (considerar e incluir se fizer sentido): ${topicsHint || '(nao informado)'}
 
 Transcricao:
 """
