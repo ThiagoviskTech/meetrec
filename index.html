@@ -380,6 +380,10 @@
   startBtn.addEventListener('click', async () => {
     resultCard.classList.add('hidden');
     draftBanner.classList.add('hidden');
+    // Evita que "Baixar resumo (Word)" entregue o resumo de uma reuniao anterior: uma
+    // gravacao nova so deve poder baixar um resumo gerado para ELA, nunca um resumo antigo
+    // que ainda estivesse guardado na memoria (de uma reuniao anterior ou do historico).
+    lastMeeting = null;
     if (!draftRestored){
       finalTranscript = '';
     }
@@ -467,6 +471,7 @@
       setStatus('Pronto para gravar', false);
     } catch (e){
       resultContent.innerHTML = '<p class="muted">Erro ao gerar o resumo: ' + escapeHtml(e.message) + '</p>';
+      lastMeeting = null;
       setStatus('Pronto para gravar', false);
     } finally {
       resultLoading.classList.add('hidden');
