@@ -2,7 +2,7 @@
   "name": "meetrec",
   "version": "1.0.0",
   "private": true,
-  "description": "Transcricao e resumo de reunioes com IA (Web Speech API + Anthropic Claude)",
+  "description": "Transcricao e resumo de reunioes com IA (Web Speech API + Google Gemini)",
   "engines": {
     "node": ">=18"
   }

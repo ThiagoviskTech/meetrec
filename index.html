@@ -135,6 +135,9 @@
   <div class="card" id="transcriptCard">
     <p class="section-title">Transcrição</p>
     <div class="transcript" id="transcriptBox"><span class="muted">A transcrição aparece aqui em tempo real…</span></div>
+    <div class="btn-row" style="margin-top:14px;">
+      <button class="btn-secondary" id="downloadTranscriptBtn">📝 Baixar transcrição (.txt)</button>
+    </div>
   </div>
 
   <div class="card hidden" id="resultCard">
@@ -142,7 +145,6 @@
     <div id="resultLoading" class="hidden muted"><span class="spinner"></span>Gerando tópicos, resumo e plano de ação…</div>
     <div id="resultContent" class="result"></div>
     <div class="btn-row" style="margin-top:14px;">
-      <button class="btn-secondary" id="downloadTranscriptBtn">📝 Transcrição (.txt)</button>
       <button class="btn-secondary" id="downloadSummaryBtn">📄 Resumo (Word)</button>
     </div>
   </div>
@@ -229,8 +231,15 @@
   }
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && recognizing && !wakeLock){
+    if (document.visibilityState !== 'visible') return;
+    if (recognizing && !wakeLock){
       requestWakeLock();
+    }
+    // O Android às vezes mata o reconhecimento de voz enquanto a aba fica em segundo plano
+    // (tela bloqueada, troca de app) sem disparar nenhum evento — ao voltar, percebemos que
+    // devería estar gravando mas não está, e tentamos retomar sozinhos.
+    if (!userStopped && recognition && !recognizing){
+      attemptRestart();
     }
   });
 
@@ -330,19 +339,34 @@
     r.onend = () => {
       recognizing = false;
       if (!userStopped){
-        restartTimer = setTimeout(() => {
-          try {
-            finalizedCount = 0; // nova sessao de reconhecimento = results[] reinicia do zero
-            recognition.start();
-            recognizing = true;
-            setStatus('Gravando…', true);
-          }
-          catch(e){ /* already started */ }
-        }, 120);
+        restartTimer = setTimeout(attemptRestart, 120);
       }
     };
 
     return r;
+  }
+
+  // Tenta reiniciar o reconhecimento de voz. Se falhar (ex: o motor ainda nao liberou a
+  // sessao anterior, ou o Android suspendeu o microfone em segundo plano), tenta mais
+  // algumas vezes antes de desistir e avisar claramente — em vez de travar silenciosamente
+  // (o que fazia a transcricao "parar no meio" sem nenhum aviso ao usuario).
+  let restartAttempts = 0;
+  function attemptRestart(){
+    if (userStopped || !recognition) return;
+    try {
+      finalizedCount = 0; // nova sessao de reconhecimento = results[] reinicia do zero
+      recognition.start();
+      recognizing = true;
+      restartAttempts = 0;
+      setStatus('Gravando…', true);
+    } catch (e){
+      restartAttempts++;
+      if (restartAttempts <= 8){
+        restartTimer = setTimeout(attemptRestart, 400);
+      } else {
+        setStatus('A gravação parou de responder. Toque em "Parar e gerar resumo" para salvar o que foi capturado até agora.', false);
+      }
+    }
   }
 
   function toggleButtons(isRecording){
@@ -375,6 +399,7 @@
     }
 
     recognition = buildRecognition();
+    restartAttempts = 0;
     try {
       recognition.start();
       recognizing = true;
